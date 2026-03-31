@@ -146,8 +146,10 @@ export default function Home(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <Text style={styles.greet}>Good {format(new Date(), 'aaaa')}, {settings.name}</Text>
-        <Text style={styles.date}>{format(new Date(), 'EEEE, MMMM d')}</Text>
+        <View style={styles.header}>
+          <Text style={styles.greet}>Good {format(new Date(), 'aaaa')}, {settings.name}</Text>
+          <Text style={styles.date}>{format(new Date(), 'EEEE, MMMM d')}</Text>
+        </View>
 
         <SleepDebtBadge debtMin={debtMin} />
 
@@ -161,20 +163,44 @@ export default function Home(): React.JSX.Element {
 
         {activeSession ? (
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Currently sleeping</Text>
-            <Text style={styles.panelBody}>Started: {formatClockFromIso(activeSession.sleep_start)}</Text>
-            <Text style={styles.panelBody}>Duration so far: {formatDuration(elapsed)}</Text>
-            <Text style={styles.tip}>You need {formatDuration(remainingForGoal)} more for your goal.</Text>
+            <View style={styles.panelHeader}>
+              <Text style={styles.panelTitle}>Currently sleeping</Text>
+              <View style={styles.activeDot} />
+            </View>
+            <View style={styles.panelContent}>
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>Started at</Text>
+                <Text style={styles.statValue}>{formatClockFromIso(activeSession.sleep_start)}</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>Duration</Text>
+                <Text style={styles.statValue}>{formatDuration(elapsed)}</Text>
+              </View>
+            </View>
+            <View style={styles.tipWrap}>
+              <Text style={styles.tip}>You need {formatDuration(remainingForGoal)} more for your goal.</Text>
+            </View>
           </View>
         ) : (
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Last Night</Text>
-            <Text style={styles.panelBody}>
-              {lastNight
-                ? `${formatDuration(lastNight.duration_min ?? 0)} · Score ${lastNight.health_score ?? '--'}`
-                : 'No session recorded yet.'}
-            </Text>
-            <Text style={styles.panelBody}>Avg (7d): {formatDuration(avgLast7)} · Streak: {streak}</Text>
+            <View style={styles.panelContent}>
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>Duration</Text>
+                <Text style={styles.statValue}>
+                  {lastNight ? formatDuration(lastNight.duration_min ?? 0) : '--'}
+                </Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>Health Score</Text>
+                <Text style={styles.statValue}>
+                  {lastNight?.health_score ? `${lastNight.health_score}/100` : '--'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.footerWrap}>
+              <Text style={styles.footerText}>Avg (7d): {formatDuration(avgLast7)}  •  Streak: {streak}</Text>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -214,41 +240,100 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
-    gap: 14,
+    padding: 20,
+    gap: 16,
+  },
+  header: {
+    marginBottom: 4,
   },
   greet: {
     color: Colors.textPrimary,
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   date: {
     color: Colors.textSecondary,
-    marginBottom: 2,
+    fontSize: 16,
+    marginTop: 4,
+    fontWeight: '500',
   },
   mainButtonWrap: {
-    marginTop: 8,
+    marginVertical: 12,
   },
   panel: {
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 14,
-    gap: 4,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  panelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  activeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.accent,
   },
   panelTitle: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
+    marginBottom: 12,
   },
-  panelBody: {
+  panelContent: {
+    gap: 12,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  statLabel: {
     color: Colors.textSecondary,
+    fontSize: 15,
+  },
+  statValue: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  tipWrap: {
+    marginTop: 16,
+    backgroundColor: Colors.moonGlow,
+    padding: 12,
+    borderRadius: 12,
   },
   tip: {
     color: Colors.primaryLight,
-    marginTop: 6,
+    textAlign: 'center',
     fontWeight: '600',
+    fontSize: 14,
+  },
+  footerWrap: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    alignItems: 'center',
+  },
+  footerText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
   },
   modalBackdrop: {
     flex: 1,

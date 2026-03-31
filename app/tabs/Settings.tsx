@@ -111,63 +111,88 @@ export default function Settings(): React.JSX.Element {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Text style={styles.heading}>Settings</Text>
 
-        <View style={styles.card}>
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            style={styles.input}
-            placeholder="Your name"
-            placeholderTextColor={Colors.textMuted}
-          />
-
-          <Text style={styles.label}>Sleep Goal (minutes)</Text>
-          <View style={styles.goalRow}>
-            <Pressable
-              style={styles.goalButton}
-              onPress={() => setGoalMin((v) => Math.max(300, v - 30))}
-            >
-              <Text style={styles.goalButtonText}>-30m</Text>
-            </Pressable>
-            <Text style={styles.goalValue}>{goalMin} min</Text>
-            <Pressable
-              style={styles.goalButton}
-              onPress={() => setGoalMin((v) => Math.min(600, v + 30))}
-            >
-              <Text style={styles.goalButtonText}>+30m</Text>
-            </Pressable>
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>PROFILE</Text>
+          <View style={styles.cardGroup}>
+            <View style={styles.row}>
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                style={styles.input}
+                placeholder="Your name"
+                placeholderTextColor={Colors.textMuted}
+                returnKeyType="done"
+              />
+            </View>
           </View>
-
-          <Text style={styles.label}>Target Bedtime (HH:mm)</Text>
-          <TextInput
-            value={bedtime}
-            onChangeText={setBedtime}
-            style={styles.input}
-            placeholder="22:30"
-            placeholderTextColor={Colors.textMuted}
-          />
-
-          <View style={styles.switchRow}>
-            <Text style={styles.switchText}>Notifications</Text>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-              trackColor={{ false: Colors.surfaceAlt, true: Colors.primary }}
-              thumbColor={Colors.textPrimary}
-            />
-          </View>
-
-          <Pressable style={styles.saveButton} onPress={onSave}>
-            <Text style={styles.saveText}>Save Settings</Text>
-          </Pressable>
         </View>
 
-        <View style={styles.card}>
-          <Pressable style={styles.clearButton} onPress={onClearData}>
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>SLEEP GOALS</Text>
+          <View style={styles.cardGroup}>
+            <View style={[styles.row, styles.bottomBorder]}>
+              <Text style={styles.label}>Sleep Goal</Text>
+              <View style={styles.goalRow}>
+                <Pressable
+                  style={styles.goalButton}
+                  onPress={() => setGoalMin((v) => Math.max(300, v - 30))}
+                >
+                  <Text style={styles.goalButtonText}>-30m</Text>
+                </Pressable>
+                <Text style={styles.goalValue}>{goalMin} min</Text>
+                <Pressable
+                  style={styles.goalButton}
+                  onPress={() => setGoalMin((v) => Math.min(600, v + 30))}
+                >
+                  <Text style={styles.goalButtonText}>+30m</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={[styles.row, styles.bottomBorder]}>
+              <Text style={styles.label}>Bedtime</Text>
+              <TextInput
+                value={bedtime}
+                onChangeText={setBedtime}
+                style={styles.input}
+                placeholder="22:30"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="numbers-and-punctuation"
+                returnKeyType="done"
+              />
+            </View>
+
+            <View style={styles.row}>
+              <Text style={styles.label}>Notifications</Text>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={setNotificationsEnabled}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.textPrimary}
+              />
+            </View>
+          </View>
+        </View>
+
+        <Pressable 
+          style={({ pressed }) => [styles.saveButton, pressed && { opacity: 0.85 }]} 
+          onPress={onSave}
+        >
+          <Text style={styles.saveText}>Save Settings</Text>
+        </Pressable>
+
+        <View style={styles.dangerSection}>
+          <Text style={styles.sectionHeader}>DANGER ZONE</Text>
+          <Pressable 
+            style={({ pressed }) => [styles.clearButton, pressed && { opacity: 0.85 }]} 
+            onPress={onClearData}
+          >
             <Text style={styles.clearText}>Clear All Data</Text>
           </Pressable>
-          <Text style={styles.version}>App Version 1.0.0</Text>
         </View>
+
+        <Text style={styles.version}>App Version 1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -182,94 +207,118 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
-    gap: 14,
+    padding: 20,
+    paddingBottom: 40,
   },
   heading: {
     color: Colors.textPrimary,
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '800',
+    marginBottom: 20,
+    letterSpacing: 0.3,
   },
-  card: {
-    borderRadius: 16,
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+    marginLeft: 12,
+    letterSpacing: 1,
+  },
+  cardGroup: {
     backgroundColor: Colors.surface,
+    borderRadius: 20,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.border,
-    padding: 14,
-    gap: 10,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  bottomBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   label: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '500',
   },
   input: {
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
     color: Colors.textPrimary,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'right',
+    minWidth: 80,
+    paddingVertical: 4,
   },
   goalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
   goalButton: {
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   goalButtonText: {
-    color: Colors.textPrimary,
-    fontWeight: '600',
-  },
-  goalValue: {
     color: Colors.primaryLight,
     fontWeight: '700',
+  },
+  goalValue: {
+    color: Colors.textPrimary,
+    fontWeight: '600',
     fontSize: 16,
-  },
-  switchRow: {
-    marginTop: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  switchText: {
-    color: Colors.textSecondary,
+    minWidth: 56,
+    textAlign: 'center',
   },
   saveButton: {
-    marginTop: 8,
-    borderRadius: 12,
     backgroundColor: Colors.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: 'center',
-    paddingVertical: 12,
+    marginTop: 10,
+    marginBottom: 30,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   saveText: {
     color: Colors.textPrimary,
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 17,
+  },
+  dangerSection: {
+    marginTop: 10,
+    marginBottom: 20,
   },
   clearButton: {
-    borderRadius: 12,
     backgroundColor: '#3A1F25',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#5C2832',
+    paddingVertical: 16,
     alignItems: 'center',
-    paddingVertical: 12,
   },
   clearText: {
     color: '#FF9AA5',
     fontWeight: '700',
+    fontSize: 16,
   },
   version: {
     color: Colors.textMuted,
     textAlign: 'center',
     fontSize: 12,
+    marginTop: 20,
   },
 });

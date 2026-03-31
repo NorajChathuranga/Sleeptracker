@@ -79,13 +79,19 @@ export default function Dashboard(): React.JSX.Element {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <View style={styles.headerRow}>
+          <Text style={styles.pageTitle}>Dashboard</Text>
+        </View>
+
         <Text style={styles.sectionTitle}>Sleep Health Score</Text>
         <View style={styles.ringWrap}>
           <ScoreRing score={analysis.avgScore} />
         </View>
 
         <Text style={styles.sectionTitle}>Last 7 Days</Text>
-        <SleepChart sessions={last7} />
+        <View style={styles.chartCard}>
+          <SleepChart sessions={last7} />
+        </View>
 
         <WeeklyStats
           avgDurationMin={analysis.avgDurationMin}
@@ -115,24 +121,52 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
-    gap: 14,
+    padding: 20,
+    gap: 16,
+  },
+  headerRow: {
+    marginBottom: 4,
+  },
+  pageTitle: {
+    color: Colors.textPrimary,
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   sectionTitle: {
     color: Colors.textPrimary,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 4,
   },
   ringWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
+    borderRadius: 24,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingVertical: 20,
+    paddingVertical: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  chartCard: {
+    borderRadius: 24,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   adviceList: {
-    gap: 10,
+    gap: 12,
   },
 });
