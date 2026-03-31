@@ -42,9 +42,21 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
+function sanitizeApiKey(raw: string | undefined): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
 function getAiKeys(): { geminiKey: string | null; groqKey: string | null } {
-  const envGemini = process.env.EXPO_PUBLIC_GEMINI_API_KEY?.trim() ?? '';
-  const envGroq = process.env.EXPO_PUBLIC_GROQ_API_KEY?.trim() ?? '';
+  const envGemini = sanitizeApiKey(process.env.EXPO_PUBLIC_GEMINI_API_KEY);
+  const envGroq = sanitizeApiKey(process.env.EXPO_PUBLIC_GROQ_API_KEY);
 
   const extra = (Constants.expoConfig?.extra ?? {}) as {
     ai?: {
@@ -53,8 +65,8 @@ function getAiKeys(): { geminiKey: string | null; groqKey: string | null } {
     };
   };
 
-  const appGemini = extra.ai?.geminiApiKey?.trim() ?? '';
-  const appGroq = extra.ai?.groqApiKey?.trim() ?? '';
+  const appGemini = sanitizeApiKey(extra.ai?.geminiApiKey);
+  const appGroq = sanitizeApiKey(extra.ai?.groqApiKey);
 
   const geminiKey = envGemini || appGemini || null;
   const groqKey = envGroq || appGroq || null;

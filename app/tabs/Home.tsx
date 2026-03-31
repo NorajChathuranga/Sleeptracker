@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -36,6 +36,8 @@ function calcGoalStreak(durations: Array<number | null>, goalMin: number): numbe
   return streak;
 }
 
+const WAKE_MODAL_TIMEOUT_SECONDS = 15;
+
 export default function Home(): React.JSX.Element {
   const {
     sessions,
@@ -53,6 +55,8 @@ export default function Home(): React.JSX.Element {
   const [wakeModalVisible, setWakeModalVisible] = useState(false);
   const [mood, setMood] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [notes, setNotes] = useState('');
+  const [wakeCountdown, setWakeCountdown] = useState(WAKE_MODAL_TIMEOUT_SECONDS);
+  const [isWakeSubmitting, setIsWakeSubmitting] = useState(false);
 
   const completed = useMemo(
     () => sessions.filter((session) => session.wake_time !== null),
@@ -158,19 +162,59 @@ export default function Home(): React.JSX.Element {
       return;
     }
 
+    setWakeCountdown(WAKE_MODAL_TIMEOUT_SECONDS);
     setWakeModalVisible(true);
   };
 
-  const submitWake = async (): Promise<void> => {
-    const updated = await endSleep({ mood, notes: notes.trim() || null });
+  const closeWakeModal = useCallback((): void => {
     setWakeModalVisible(false);
     setMood(null);
     setNotes('');
+    setWakeCountdown(WAKE_MODAL_TIMEOUT_SECONDS);
+  }, []);
 
-    if (updated) {
-      Alert.alert('Good morning', `You slept for ${formatDuration(updated.duration_min ?? 0)}.`);
+  const submitWake = useCallback(
+    async ({ skipMood = false }: { skipMood?: boolean } = {}): Promise<void> => {
+      if (isWakeSubmitting) return;
+      setIsWakeSubmitting(true);
+
+      try {
+        await endSleep({
+          mood: skipMood ? null : mood,
+          notes: skipMood ? null : notes.trim() || null,
+        });
+      } finally {
+        closeWakeModal();
+        setIsWakeSubmitting(false);
+      }
+    },
+    [closeWakeModal, endSleep, isWakeSubmitting, mood, notes],
+  );
+
+  useEffect(() => {
+    if (!wakeModalVisible) return;
+
+    setWakeCountdown(WAKE_MODAL_TIMEOUT_SECONDS);
+    const timer = setInterval(() => {
+      setWakeCountdown((value) => Math.max(0, value - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [wakeModalVisible]);
+
+  useEffect(() => {
+    if (!wakeModalVisible || wakeCountdown > 0) return;
+    if (isWakeSubmitting) return;
+
+    void submitWake({ skipMood: true });
+  }, [isWakeSubmitting, submitWake, wakeCountdown, wakeModalVisible]);
+
+  const wakeDurationLabel = useMemo(() => {
+    if (!activeSession) {
+      return '--';
     }
-  };
+    return formatDuration(elapsed);
+  }, [activeSession, elapsed]);
 
   const remainingForGoal = Math.max(0, settings.sleep_goal_min - elapsed);
 
@@ -243,10 +287,24 @@ export default function Home(): React.JSX.Element {
         )}
       </ScrollView>
 
-      <Modal visible={wakeModalVisible} transparent animationType="slide" onRequestClose={() => setWakeModalVisible(false)}>
+      <Modal
+        visible={wakeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          void submitWake({ skipMood: true });
+        }}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Good morning</Text>
+            <View style={styles.modalSummaryBox}>
+              <View style={styles.modalSummaryRow}>
+                <Text style={styles.modalSummaryLabel}>Slept</Text>
+                <Text style={styles.modalSummaryValue}>{wakeDurationLabel}</Text>
+              </View>
+              <Text style={styles.modalCountdown}>Auto close in {wakeCountdown}s</Text>
+            </View>
             <Text style={styles.modalSubtitle}>How do you feel?</Text>
             <MoodPicker value={mood} onChange={setMood} />
 
@@ -259,8 +317,24 @@ export default function Home(): React.JSX.Element {
               multiline
             />
 
-            <Pressable style={styles.doneBtn} onPress={submitWake}>
+            <Pressable
+              style={[styles.doneBtn, isWakeSubmitting && styles.disabledBtn]}
+              onPress={() => {
+                void submitWake();
+              }}
+              disabled={isWakeSubmitting}
+            >
               <Text style={styles.doneBtnText}>Done</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.closeBtn, isWakeSubmitting && styles.disabledBtn]}
+              onPress={() => {
+                void submitWake({ skipMood: true });
+              }}
+              disabled={isWakeSubmitting}
+            >
+              <Text style={styles.closeBtnText}>Close now</Text>
             </Pressable>
           </View>
         </View>
@@ -393,6 +467,33 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     color: Colors.textSecondary,
   },
+  modalSummaryBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    padding: 12,
+    gap: 6,
+  },
+  modalSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalSummaryLabel: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalSummaryValue: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalCountdown: {
+    color: Colors.textMuted,
+    fontSize: 13,
+  },
   noteInput: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -414,5 +515,21 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: '700',
     fontSize: 16,
+  },
+  closeBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  closeBtnText: {
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  disabledBtn: {
+    opacity: 0.65,
   },
 });
