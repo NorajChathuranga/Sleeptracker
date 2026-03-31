@@ -1,7 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  withRepeat,
+  withSequence,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
 import { Colors } from '../constants/colors';
 import { formatDuration } from '../utils/timeUtils';
@@ -16,22 +24,50 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function SleepButton({ mode, onPress, elapsedMinutes = 0 }: Props): React.JSX.Element {
   const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const pulse = useSharedValue(1);
 
   const isSleep = mode === 'sleep';
 
+  useEffect(() => {
+    if (!isSleep) { // Active sleeping mode
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(1.05, { duration: 1500 }),
+          withTiming(1, { duration: 1500 })
+        ),
+        -1, // infinite
+        true
+      );
+    } else {
+      pulse.value = withTiming(1, { duration: 500 });
+    }
+  }, [isSleep, pulse]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value * pulse.value }],
+  }));
+
+  const handlePressIn = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    scale.value = withSpring(0.92, { damping: 12, stiffness: 200 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 12, stiffness: 200 });
+  };
+
+  const handlePress = () => {
+    Haptics.notificationAsync(
+      isSleep ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning
+    );
+    onPress();
+  };
+
   return (
     <AnimatedPressable
-      onPressIn={() => {
-        scale.value = withSpring(0.96, { damping: 12, stiffness: 180 });
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, { damping: 12, stiffness: 180 });
-      }}
-      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={handlePress}
       style={[styles.container, animatedStyle]}
     >
       <LinearGradient
