@@ -13,6 +13,8 @@ import Home from './app/tabs/Home';
 import Dashboard from './app/tabs/Dashboard';
 import Report from './app/tabs/Report';
 import Settings from './app/tabs/Settings';
+import { initializeWakeAlarmListeners } from './alarm/alarmManager';
+import { registerWakeAlarmBackgroundTask } from './alarm/backgroundTask';
 import { Colors } from './constants/colors';
 import { useSleepStore } from './store/useSleepStore';
 import { useUserStore } from './store/useUserStore';
@@ -84,6 +86,33 @@ export default function App(): React.JSX.Element {
 
     void bootstrap();
   }, [loadSessions, loadSettings]);
+
+  useEffect(() => {
+    let dispose = (): void => undefined;
+    let active = true;
+
+    const setupAlarmRuntime = async (): Promise<void> => {
+      await registerWakeAlarmBackgroundTask();
+
+      const cleanup = await initializeWakeAlarmListeners(async () => {
+        await useSleepStore.getState().autoEndSleepFromAlarm();
+      });
+
+      if (!active) {
+        cleanup();
+        return;
+      }
+
+      dispose = cleanup;
+    };
+
+    void setupAlarmRuntime();
+
+    return () => {
+      active = false;
+      dispose();
+    };
+  }, []);
 
   const navTheme = useMemo(
     () => ({

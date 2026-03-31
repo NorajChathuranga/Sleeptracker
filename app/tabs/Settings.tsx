@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { cancelWakeAlarm, requestAlarmPermission, scheduleWakeAlarm } from '../../alarm/alarmManager';
 import { Colors } from '../../constants/colors';
 import {
   areNotificationsSupported,
@@ -35,23 +36,28 @@ export default function Settings(): React.JSX.Element {
   const resetSettings = useUserStore((state) => state.resetSettings);
 
   const clearAllData = useSleepStore((state) => state.clearAllData);
+  const activeSession = useSleepStore((state) => state.activeSession);
   const sessions = useSleepStore((state) => state.getLast7Days());
 
   const [name, setName] = useState(settings.name);
   const [goalMin, setGoalMin] = useState(settings.sleep_goal_min);
   const [bedtime, setBedtime] = useState(settings.target_bedtime);
   const [notificationsEnabled, setNotificationsEnabled] = useState(settings.notifications_enabled);
+  const [alarmTime, setAlarmTime] = useState(settings.alarm_time);
+  const [alarmEnabled, setAlarmEnabled] = useState(settings.alarm_enabled);
 
   useEffect(() => {
     setName(settings.name);
     setGoalMin(settings.sleep_goal_min);
     setBedtime(settings.target_bedtime);
     setNotificationsEnabled(settings.notifications_enabled);
+    setAlarmTime(settings.alarm_time);
+    setAlarmEnabled(settings.alarm_enabled);
   }, [settings]);
 
   const onSave = async (): Promise<void> => {
-    if (!isValidHHMM(bedtime)) {
-      Alert.alert('Invalid bedtime', 'Use HH:mm format, for example 22:30.');
+    if (!isValidHHMM(bedtime) || !isValidHHMM(alarmTime)) {
+      Alert.alert('Invalid time', 'Use HH:mm format, for example 22:30.');
       return;
     }
 
@@ -72,11 +78,22 @@ export default function Settings(): React.JSX.Element {
       }
     }
 
+    let finalAlarmEnabled = alarmEnabled;
+    if (alarmEnabled) {
+      const granted = await requestAlarmPermission();
+      finalAlarmEnabled = granted;
+      if (!granted) {
+        Alert.alert('Permission denied', 'Wake alarm is disabled until notification permission is granted.');
+      }
+    }
+
     await updateSettings({
       name: name.trim() || 'Friend',
       sleep_goal_min: goalMin,
       target_bedtime: bedtime,
       notifications_enabled: finalNotifications,
+      alarm_time: alarmTime,
+      alarm_enabled: finalAlarmEnabled,
     });
 
     if (finalNotifications) {
@@ -86,6 +103,14 @@ export default function Settings(): React.JSX.Element {
       );
     } else {
       await cancelAllScheduledNotifications();
+    }
+
+    if (activeSession) {
+      if (finalAlarmEnabled) {
+        await scheduleWakeAlarm(alarmTime);
+      } else {
+        await cancelWakeAlarm();
+      }
     }
 
     Alert.alert('Saved', 'Settings updated successfully.');
@@ -191,6 +216,34 @@ export default function Settings(): React.JSX.Element {
             <Text style={styles.clearText}>Clear All Data</Text>
           </Pressable>
         </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionHeader}>WAKE ALARM</Text>
+            <View style={styles.cardGroup}>
+              <View style={[styles.row, styles.bottomBorder]}>
+                <Text style={styles.label}>Alarm Time</Text>
+                <TextInput
+                  value={alarmTime}
+                  onChangeText={setAlarmTime}
+                  style={styles.input}
+                  placeholder="06:30"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="numbers-and-punctuation"
+                  returnKeyType="done"
+                />
+              </View>
+
+              <View style={styles.row}>
+                <Text style={styles.label}>Enable Wake Alarm</Text>
+                <Switch
+                  value={alarmEnabled}
+                  onValueChange={setAlarmEnabled}
+                  trackColor={{ false: Colors.border, true: Colors.primary }}
+                  thumbColor={Colors.textPrimary}
+                />
+              </View>
+            </View>
+          </View>
 
         <Text style={styles.version}>App Version 1.0.0</Text>
       </ScrollView>

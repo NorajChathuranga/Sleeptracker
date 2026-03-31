@@ -6,6 +6,7 @@ import { SleepConfig } from '../constants/sleepConfig';
 import { sleepRepository } from '../db/sleepRepository';
 import { buildBaseline } from '../logic/baselineAnalyzer';
 import { calculateSleepScore } from '../logic/scoreCalculator';
+import { cancelWakeAlarm, scheduleWakeAlarm } from '../alarm/alarmManager';
 import {
   scheduleAdaptiveBedtimeReminder,
   scheduleSleepDebtAlert,
@@ -19,13 +20,23 @@ interface EndSleepPayload {
   notes: string | null;
 }
 
+interface WakeSummary {
+  sessionId: string;
+  durationMin: number;
+  wakeTimeIso: string;
+}
+
 interface SleepState {
   sessions: SleepSession[];
   activeSession: SleepSession | null;
+  pendingWakeSummary: WakeSummary | null;
   isLoading: boolean;
+  isAutoEndingByAlarm: boolean;
   loadSessions: () => Promise<void>;
   startSleep: () => Promise<void>;
   endSleep: (payload: EndSleepPayload) => Promise<SleepSession | null>;
+  autoEndSleepFromAlarm: () => Promise<SleepSession | null>;
+  clearPendingWakeSummary: () => void;
   getLast7Days: () => SleepSession[];
   getTodaySession: () => SleepSession | null;
   recoverStaleSession: () => Promise<SleepSession | null>;
@@ -42,7 +53,9 @@ function getCompletedSessions(sessions: SleepSession[]): SleepSession[] {
 export const useSleepStore = create<SleepState>((set, get) => ({
   sessions: [],
   activeSession: null,
+  pendingWakeSummary: null,
   isLoading: false,
+  isAutoEndingByAlarm: false,
 
   loadSessions: async () => {
     set({ isLoading: true });
@@ -75,11 +88,18 @@ export const useSleepStore = create<SleepState>((set, get) => ({
       sessions: [...state.sessions, session],
       activeSession: session,
     }));
+
+    const userSettings = useUserStore.getState().settings;
+    if (userSettings.alarm_enabled) {
+      await scheduleWakeAlarm(userSettings.alarm_time);
+    }
   },
 
   endSleep: async ({ mood, notes }) => {
     const active = get().activeSession;
     if (!active) return null;
+
+    await cancelWakeAlarm();
 
     const now = new Date();
     const rawDuration = differenceInMinutes(now, new Date(active.sleep_start));
@@ -136,6 +156,35 @@ export const useSleepStore = create<SleepState>((set, get) => ({
     return updated;
   },
 
+  autoEndSleepFromAlarm: async () => {
+    const active = get().activeSession;
+    if (!active) return null;
+    if (get().isAutoEndingByAlarm) return null;
+
+    set({ isAutoEndingByAlarm: true });
+
+    try {
+      const updated = await get().endSleep({ mood: null, notes: 'Auto-ended by alarm' });
+      if (!updated) return null;
+
+      set({
+        pendingWakeSummary: {
+          sessionId: updated.id,
+          durationMin: updated.duration_min ?? 0,
+          wakeTimeIso: updated.wake_time ?? new Date().toISOString(),
+        },
+      });
+
+      return updated;
+    } finally {
+      set({ isAutoEndingByAlarm: false });
+    }
+  },
+
+  clearPendingWakeSummary: () => {
+    set({ pendingWakeSummary: null });
+  },
+
   getLast7Days: () => getCompletedSessions(get().sessions).slice(-7),
 
   getTodaySession: () => {
@@ -178,6 +227,7 @@ export const useSleepStore = create<SleepState>((set, get) => ({
 
   clearAllData: async () => {
     await sleepRepository.clearAll();
-    set({ sessions: [], activeSession: null });
+    await cancelWakeAlarm();
+    set({ sessions: [], activeSession: null, pendingWakeSummary: null });
   },
 }));

@@ -12,10 +12,12 @@ import {
 import { differenceInMinutes, format } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AlarmPicker } from '../../components/AlarmPicker';
 import { Colors } from '../../constants/colors';
 import { MoodPicker } from '../../components/MoodPicker';
 import { SleepButton } from '../../components/SleepButton';
 import { SleepDebtBadge } from '../../components/SleepDebtBadge';
+import { cancelWakeAlarm, requestAlarmPermission, scheduleWakeAlarm } from '../../alarm/alarmManager';
 import { calculateSleepDebt } from '../../logic/sleepDebt';
 import { useSleepStore } from '../../store/useSleepStore';
 import { useUserStore } from '../../store/useUserStore';
@@ -38,16 +40,20 @@ export default function Home(): React.JSX.Element {
   const {
     sessions,
     activeSession,
+    pendingWakeSummary,
     startSleep,
     endSleep,
+    clearPendingWakeSummary,
     getLast7Days,
     recoverStaleSession,
     discardActiveSession,
   } = useSleepStore((state) => state);
   const settings = useUserStore((state) => state.settings);
+  const updateSettings = useUserStore((state) => state.updateSettings);
 
   const [elapsed, setElapsed] = useState(0);
   const [wakeModalVisible, setWakeModalVisible] = useState(false);
+  const [autoWakeModalVisible, setAutoWakeModalVisible] = useState(false);
   const [mood, setMood] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [notes, setNotes] = useState('');
 
@@ -121,6 +127,39 @@ export default function Home(): React.JSX.Element {
     void checkStale();
   }, [discardActiveSession, endSleep, recoverStaleSession]);
 
+  useEffect(() => {
+    if (!pendingWakeSummary) return;
+    setAutoWakeModalVisible(true);
+  }, [pendingWakeSummary]);
+
+  const handleAlarmToggle = async (enabled: boolean): Promise<void> => {
+    if (enabled) {
+      const granted = await requestAlarmPermission();
+      if (!granted) {
+        Alert.alert('Permission denied', 'Allow notifications to enable wake alarms.');
+        return;
+      }
+    }
+
+    await updateSettings({ alarm_enabled: enabled });
+
+    if (activeSession) {
+      if (enabled) {
+        await scheduleWakeAlarm(settings.alarm_time);
+      } else {
+        await cancelWakeAlarm();
+      }
+    }
+  };
+
+  const handleAlarmTimeChange = async (alarmTime: string): Promise<void> => {
+    await updateSettings({ alarm_time: alarmTime });
+
+    if (activeSession && settings.alarm_enabled) {
+      await scheduleWakeAlarm(alarmTime);
+    }
+  };
+
   const handlePrimaryAction = async (): Promise<void> => {
     if (!activeSession) {
       await startSleep();
@@ -152,6 +191,13 @@ export default function Home(): React.JSX.Element {
         </View>
 
         <SleepDebtBadge debtMin={debtMin} />
+
+        <AlarmPicker
+          enabled={settings.alarm_enabled}
+          timeHHMM={settings.alarm_time}
+          onToggle={handleAlarmToggle}
+          onChangeTime={handleAlarmTimeChange}
+        />
 
         <View style={styles.mainButtonWrap}>
           <SleepButton
@@ -223,6 +269,44 @@ export default function Home(): React.JSX.Element {
 
             <Pressable style={styles.doneBtn} onPress={submitWake}>
               <Text style={styles.doneBtnText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={autoWakeModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setAutoWakeModalVisible(false);
+          clearPendingWakeSummary();
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Alarm triggered</Text>
+            <Text style={styles.modalSubtitle}>Your sleep session has been ended automatically.</Text>
+
+            <View style={styles.autoSummaryBox}>
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>Slept</Text>
+                <Text style={styles.statValue}>{formatDuration(pendingWakeSummary?.durationMin ?? 0)}</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>Ended at</Text>
+                <Text style={styles.statValue}>{formatClockFromIso(pendingWakeSummary?.wakeTimeIso ?? null)}</Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.doneBtn}
+              onPress={() => {
+                setAutoWakeModalVisible(false);
+                clearPendingWakeSummary();
+              }}
+            >
+              <Text style={styles.doneBtnText}>Okay</Text>
             </Pressable>
           </View>
         </View>
@@ -376,5 +460,14 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: '700',
     fontSize: 16,
+  },
+  autoSummaryBox: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceAlt,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
   },
 });

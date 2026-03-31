@@ -13,6 +13,7 @@ SleepWise is a full React Native + Expo sleep tracker app built from your plan.
 - Settings for name, goal, bedtime, notifications, and clear data
 - Local-first persistence with SQLite
 - Adaptive bedtime notifications + sleep debt alert
+- Wake alarm scheduling with automatic sleep auto-end on ring
 - Stale active session recovery prompt
 
 ## Stack

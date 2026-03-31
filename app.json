@@ -15,7 +15,8 @@
       "bundleIdentifier": "com.sleepwise.app"
     },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
     ]
   }
 }

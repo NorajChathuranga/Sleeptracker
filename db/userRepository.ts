@@ -6,6 +6,8 @@ const defaultSettings: UserSettings = {
   name: 'Friend',
   sleep_goal_min: SleepConfig.defaultGoalMin,
   target_bedtime: '22:30',
+  alarm_time: '06:30',
+  alarm_enabled: true,
   onboarding_done: false,
   baseline_established: false,
   baseline_avg_duration: null,
@@ -26,6 +28,7 @@ function deserializeByKey(key: keyof UserSettings, value: string): UserSettings[
   if (key === 'baseline_score') return Number(value);
 
   if (
+    key === 'alarm_enabled' ||
     key === 'onboarding_done' ||
     key === 'baseline_established' ||
     key === 'notifications_enabled'

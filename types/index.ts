@@ -16,6 +16,8 @@ export interface UserSettings {
   name: string;
   sleep_goal_min: number;
   target_bedtime: string;
+  alarm_time: string;
+  alarm_enabled: boolean;
   onboarding_done: boolean;
   baseline_established: boolean;
   baseline_avg_duration: number | null;
