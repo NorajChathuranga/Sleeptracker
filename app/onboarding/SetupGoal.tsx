@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, Pressable, View, TextInput } from 'react-native';
+import { StyleSheet, Text, Pressable, View, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '../../constants/colors';
 import { SleepConfig } from '../../constants/sleepConfig';

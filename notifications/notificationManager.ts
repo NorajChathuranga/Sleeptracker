@@ -1,19 +1,55 @@
-import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { getHours, getMinutes } from 'date-fns';
 
 import { parseBedtimeToHM } from '../utils/timeUtils';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+type NotificationsModule = typeof import('expo-notifications');
+
+let notificationsModulePromise: Promise<NotificationsModule | null> | null = null;
+let handlerConfigured = false;
+
+function isExpoGoClient(): boolean {
+  return (
+    Constants.executionEnvironment === 'storeClient' ||
+    Constants.appOwnership === 'expo'
+  );
+}
+
+async function getNotificationsModule(): Promise<NotificationsModule | null> {
+  if (isExpoGoClient()) return null;
+
+  if (!notificationsModulePromise) {
+    notificationsModulePromise = import('expo-notifications')
+      .then((Notifications) => {
+        if (!handlerConfigured) {
+          Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+              shouldShowAlert: true,
+              shouldShowBanner: true,
+              shouldShowList: true,
+              shouldPlaySound: false,
+              shouldSetBadge: false,
+            }),
+          });
+          handlerConfigured = true;
+        }
+
+        return Notifications;
+      })
+      .catch(() => null);
+  }
+
+  return notificationsModulePromise;
+}
+
+export function areNotificationsSupported(): boolean {
+  return !isExpoGoClient();
+}
 
 export async function requestNotificationPermission(): Promise<boolean> {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return false;
+
   const existing = await Notifications.getPermissionsAsync();
   if (existing.granted) return true;
 
@@ -21,10 +57,20 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return requested.granted;
 }
 
+export async function cancelAllScheduledNotifications(): Promise<void> {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
+
+  await Notifications.cancelAllScheduledNotificationsAsync();
+}
+
 export async function scheduleAdaptiveBedtimeReminder(
   last7SleepTimes: Date[],
   fallbackBedtime: string,
 ): Promise<void> {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
+
   await Notifications.cancelAllScheduledNotificationsAsync();
 
   let targetHour = 22;
@@ -61,6 +107,9 @@ export async function scheduleAdaptiveBedtimeReminder(
 }
 
 export async function scheduleSleepDebtAlert(debt_min: number): Promise<void> {
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
+
   if (debt_min < 60) return;
 
   const debtH = Math.floor(debt_min / 60);

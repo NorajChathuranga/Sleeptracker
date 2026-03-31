@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  SafeAreaView,
   StyleSheet,
   Switch,
   Text,
@@ -9,9 +8,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '../../constants/colors';
 import {
+  areNotificationsSupported,
   requestNotificationPermission,
   scheduleAdaptiveBedtimeReminder,
 } from '../../notifications/notificationManager';
@@ -46,22 +47,32 @@ export default function SetupReminder({ route }: Props): React.JSX.Element {
       return;
     }
 
+    let finalNotifications = notificationsEnabled;
     if (notificationsEnabled) {
-      const granted = await requestNotificationPermission();
-      if (!granted) {
-        Alert.alert('Permission needed', 'Notifications were not enabled because permission was denied.');
+      if (!areNotificationsSupported()) {
+        finalNotifications = false;
+        Alert.alert(
+          'Notifications unavailable in Expo Go',
+          'Use a development build to enable reminder notifications.',
+        );
+      } else {
+        const granted = await requestNotificationPermission();
+        finalNotifications = granted;
+        if (!granted) {
+          Alert.alert('Permission needed', 'Notifications were not enabled because permission was denied.');
+        }
       }
-      setNotificationsEnabled(granted);
+      setNotificationsEnabled(finalNotifications);
     }
 
     await completeOnboarding({
       name: params.name,
       sleep_goal_min: params.goalMin ?? 8 * 60,
       target_bedtime: targetBedtime,
-      notifications_enabled: notificationsEnabled,
+      notifications_enabled: finalNotifications,
     });
 
-    if (notificationsEnabled) {
+    if (finalNotifications) {
       await scheduleAdaptiveBedtimeReminder([], targetBedtime);
     }
   };
