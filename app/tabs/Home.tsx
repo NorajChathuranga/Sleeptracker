@@ -3,7 +3,6 @@ import {
   Alert,
   Modal,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { differenceInMinutes, format } from 'date-fns';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '../../constants/colors';
 import { MoodPicker } from '../../components/MoodPicker';

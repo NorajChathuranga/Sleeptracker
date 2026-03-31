@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
@@ -10,10 +9,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '../../constants/colors';
 import {
+  areNotificationsSupported,
+  cancelAllScheduledNotifications,
   requestNotificationPermission,
   scheduleAdaptiveBedtimeReminder,
 } from '../../notifications/notificationManager';
@@ -56,10 +57,18 @@ export default function Settings(): React.JSX.Element {
 
     let finalNotifications = notificationsEnabled;
     if (notificationsEnabled) {
-      const granted = await requestNotificationPermission();
-      finalNotifications = granted;
-      if (!granted) {
-        Alert.alert('Permission denied', 'Notifications stay disabled until permission is granted.');
+      if (!areNotificationsSupported()) {
+        finalNotifications = false;
+        Alert.alert(
+          'Notifications unavailable in Expo Go',
+          'Use a development build to enable reminder notifications.',
+        );
+      } else {
+        const granted = await requestNotificationPermission();
+        finalNotifications = granted;
+        if (!granted) {
+          Alert.alert('Permission denied', 'Notifications stay disabled until permission is granted.');
+        }
       }
     }
 
@@ -76,7 +85,7 @@ export default function Settings(): React.JSX.Element {
         bedtime,
       );
     } else {
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      await cancelAllScheduledNotifications();
     }
 
     Alert.alert('Saved', 'Settings updated successfully.');
@@ -91,7 +100,7 @@ export default function Settings(): React.JSX.Element {
         onPress: async () => {
           await clearAllData();
           await resetSettings();
-          await Notifications.cancelAllScheduledNotificationsAsync();
+          await cancelAllScheduledNotifications();
         },
       },
     ]);
