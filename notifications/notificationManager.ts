@@ -1,6 +1,7 @@
 import { getHours, getMinutes } from 'date-fns';
 
 import { parseBedtimeToHM } from '../utils/timeUtils';
+import { isExpoGo } from '../utils/runtimeEnv';
 
 type NotificationsModule = typeof import('expo-notifications');
 type ScheduledNotificationRequest = import('expo-notifications').NotificationRequest;
@@ -8,11 +9,16 @@ type ScheduledNotificationRequest = import('expo-notifications').NotificationReq
 const BEDTIME_REMINDER_KIND = 'sleepwise-bedtime-reminder';
 const DEBT_ALERT_KIND = 'sleepwise-debt-alert';
 const WAKE_ALARM_KIND = 'sleepwise-wake-alarm';
+const WAKE_ALARM_REPEAT_KIND = 'sleepwise-wake-alarm-repeat';
 
 let notificationsModulePromise: Promise<NotificationsModule | null> | null = null;
 let handlerConfigured = false;
 
 async function getNotificationsModule(): Promise<NotificationsModule | null> {
+  if (isExpoGo()) {
+    return null;
+  }
+
   if (!notificationsModulePromise) {
     notificationsModulePromise = import('expo-notifications')
       .then((Notifications) => {
@@ -20,7 +26,8 @@ async function getNotificationsModule(): Promise<NotificationsModule | null> {
           Notifications.setNotificationHandler({
             handleNotification: async (notification) => {
               const data = notification.request.content.data as { kind?: unknown } | undefined;
-              const isWakeAlarm = data?.kind === WAKE_ALARM_KIND;
+              const isWakeAlarm =
+                data?.kind === WAKE_ALARM_KIND || data?.kind === WAKE_ALARM_REPEAT_KIND;
 
               return {
               shouldShowAlert: true,
@@ -43,7 +50,7 @@ async function getNotificationsModule(): Promise<NotificationsModule | null> {
 }
 
 export function areNotificationsSupported(): boolean {
-  return true;
+  return !isExpoGo();
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {

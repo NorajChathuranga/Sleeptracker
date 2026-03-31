@@ -6,11 +6,15 @@ import type {
 
 type NotificationsModule = typeof import('expo-notifications');
 
+import { isExpoGo } from '../utils/runtimeEnv';
+
 const ALARM_CHANNEL_ID = 'sleepwise-wake-alarm';
 const WAKE_ALARM_KIND = 'sleepwise-wake-alarm';
+const WAKE_ALARM_REPEAT_KIND = 'sleepwise-wake-alarm-repeat';
 
 let notificationsModulePromise: Promise<NotificationsModule | null> | null = null;
 let lastScheduledAlarmId: string | null = null;
+let lastEscalationAlarmId: string | null = null;
 
 function parseHHMM(value: string): { hour: number; minute: number } {
 	const parts = value.split(':');
@@ -40,13 +44,19 @@ function computeNextAlarmDate(hhmm: string): Date {
 	return next;
 }
 
-function isWakeAlarmData(data: unknown): boolean {
+function isWakeAlarmKind(data: unknown, kind: string): boolean {
 	if (!data || typeof data !== 'object') return false;
 	const record = data as { kind?: unknown };
-	return record.kind === WAKE_ALARM_KIND;
+	return record.kind === kind;
+}
+
+function isAnyWakeAlarmData(data: unknown): boolean {
+	return isWakeAlarmKind(data, WAKE_ALARM_KIND) || isWakeAlarmKind(data, WAKE_ALARM_REPEAT_KIND);
 }
 
 async function getNotificationsModule(): Promise<NotificationsModule | null> {
+	if (isExpoGo()) return null;
+
 	if (!notificationsModulePromise) {
 		notificationsModulePromise = import('expo-notifications').catch(() => null);
 	}
@@ -82,7 +92,7 @@ export async function cancelWakeAlarm(): Promise<void> {
 
 	const scheduled = await Notifications.getAllScheduledNotificationsAsync();
 	const alarmIds = scheduled
-		.filter((req) => isWakeAlarmData(req.content.data))
+		.filter((req) => isWakeAlarmKind(req.content.data, WAKE_ALARM_KIND))
 		.map((req) => req.identifier);
 
 	if (lastScheduledAlarmId) {
@@ -94,7 +104,25 @@ export async function cancelWakeAlarm(): Promise<void> {
 	lastScheduledAlarmId = null;
 }
 
-export async function scheduleWakeAlarm(alarmTimeHHMM: string): Promise<Date | null> {
+export async function cancelWakeAlarmEscalation(): Promise<void> {
+	const Notifications = await getNotificationsModule();
+	if (!Notifications) return;
+
+	const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+	const alarmIds = scheduled
+		.filter((req) => isWakeAlarmKind(req.content.data, WAKE_ALARM_REPEAT_KIND))
+		.map((req) => req.identifier);
+
+	if (lastEscalationAlarmId) {
+		alarmIds.push(lastEscalationAlarmId);
+	}
+
+	const uniqueIds = [...new Set(alarmIds)];
+	await Promise.all(uniqueIds.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+	lastEscalationAlarmId = null;
+}
+
+async function scheduleWakeAlarmAtDate(targetDate: Date): Promise<Date | null> {
 	const Notifications = await getNotificationsModule();
 	if (!Notifications) return null;
 
@@ -104,7 +132,6 @@ export async function scheduleWakeAlarm(alarmTimeHHMM: string): Promise<Date | n
 	await cancelWakeAlarm();
 	await ensureAlarmChannel(Notifications);
 
-	const nextAlarm = computeNextAlarmDate(alarmTimeHHMM);
 	const identifier = await Notifications.scheduleNotificationAsync({
 		content: {
 			title: 'Wake up',
@@ -113,26 +140,67 @@ export async function scheduleWakeAlarm(alarmTimeHHMM: string): Promise<Date | n
 			priority: Notifications.AndroidNotificationPriority.MAX,
 			data: {
 				kind: WAKE_ALARM_KIND,
-				alarmTime: alarmTimeHHMM,
 			},
 		},
 		trigger: {
 			type: Notifications.SchedulableTriggerInputTypes.DATE,
-			date: nextAlarm,
+			date: targetDate,
 			channelId: ALARM_CHANNEL_ID,
 		},
 	});
 
 	lastScheduledAlarmId = identifier;
-	return nextAlarm;
+	return targetDate;
+}
+
+export async function scheduleWakeAlarm(alarmTimeHHMM: string): Promise<Date | null> {
+	const nextAlarm = computeNextAlarmDate(alarmTimeHHMM);
+	return scheduleWakeAlarmAtDate(nextAlarm);
+}
+
+export async function scheduleWakeAlarmInMinutes(minutes: number): Promise<Date | null> {
+	const safeMinutes = Math.max(1, Math.round(minutes));
+	const targetDate = new Date(Date.now() + safeMinutes * 60 * 1000);
+	return scheduleWakeAlarmAtDate(targetDate);
+}
+
+export async function scheduleWakeAlarmEscalation(): Promise<void> {
+	const Notifications = await getNotificationsModule();
+	if (!Notifications) return;
+
+	const granted = await requestAlarmPermission();
+	if (!granted) return;
+
+	await cancelWakeAlarmEscalation();
+	await ensureAlarmChannel(Notifications);
+
+	const identifier = await Notifications.scheduleNotificationAsync({
+		content: {
+			title: 'Alarm still ringing',
+			body: 'Open SleepWise to dismiss or snooze your alarm.',
+			sound: 'default',
+			priority: Notifications.AndroidNotificationPriority.MAX,
+			data: {
+				kind: WAKE_ALARM_REPEAT_KIND,
+			},
+		},
+		trigger: {
+			type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+			seconds: 60,
+			repeats: true,
+			channelId: ALARM_CHANNEL_ID,
+		},
+	});
+
+	lastEscalationAlarmId = identifier;
 }
 
 function shouldHandleWakeAlarmNotification(notification: Notification): boolean {
-	return isWakeAlarmData(notification.request.content.data);
+	return isAnyWakeAlarmData(notification.request.content.data);
 }
 
 function shouldHandleWakeAlarmResponse(response: NotificationResponse): boolean {
-	return isWakeAlarmData(response.notification.request.content.data);
+	return isAnyWakeAlarmData(response.notification.request.content.data);
 }
 
 export async function initializeWakeAlarmListeners(
@@ -140,6 +208,11 @@ export async function initializeWakeAlarmListeners(
 ): Promise<() => void> {
 	const Notifications = await getNotificationsModule();
 	if (!Notifications) return () => undefined;
+
+	const launchResponse = await Notifications.getLastNotificationResponseAsync();
+	if (launchResponse && shouldHandleWakeAlarmResponse(launchResponse)) {
+		void onAlarmTriggered();
+	}
 
 	const receivedSub: Subscription = Notifications.addNotificationReceivedListener((notification) => {
 		if (!shouldHandleWakeAlarmNotification(notification)) return;

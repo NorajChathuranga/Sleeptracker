@@ -19,7 +19,7 @@
     "@react-navigation/native-stack": "^6.11.0",
     "date-fns": "^3.6.0",
     "expo": "~54.0.33",
-    "expo-av": "~16.0.8",
+    "expo-audio": "~1.1.1",
     "expo-background-fetch": "~14.0.9",
     "expo-haptics": "~15.0.8",
     "expo-linear-gradient": "~15.0.8",

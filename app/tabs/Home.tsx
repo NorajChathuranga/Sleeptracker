@@ -40,10 +40,8 @@ export default function Home(): React.JSX.Element {
   const {
     sessions,
     activeSession,
-    pendingWakeSummary,
     startSleep,
     endSleep,
-    clearPendingWakeSummary,
     getLast7Days,
     recoverStaleSession,
     discardActiveSession,
@@ -53,7 +51,6 @@ export default function Home(): React.JSX.Element {
 
   const [elapsed, setElapsed] = useState(0);
   const [wakeModalVisible, setWakeModalVisible] = useState(false);
-  const [autoWakeModalVisible, setAutoWakeModalVisible] = useState(false);
   const [mood, setMood] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [notes, setNotes] = useState('');
 
@@ -126,11 +123,6 @@ export default function Home(): React.JSX.Element {
 
     void checkStale();
   }, [discardActiveSession, endSleep, recoverStaleSession]);
-
-  useEffect(() => {
-    if (!pendingWakeSummary) return;
-    setAutoWakeModalVisible(true);
-  }, [pendingWakeSummary]);
 
   const handleAlarmToggle = async (enabled: boolean): Promise<void> => {
     if (enabled) {
@@ -269,44 +261,6 @@ export default function Home(): React.JSX.Element {
 
             <Pressable style={styles.doneBtn} onPress={submitWake}>
               <Text style={styles.doneBtnText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={autoWakeModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          setAutoWakeModalVisible(false);
-          clearPendingWakeSummary();
-        }}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Alarm triggered</Text>
-            <Text style={styles.modalSubtitle}>Your sleep session has been ended automatically.</Text>
-
-            <View style={styles.autoSummaryBox}>
-              <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Slept</Text>
-                <Text style={styles.statValue}>{formatDuration(pendingWakeSummary?.durationMin ?? 0)}</Text>
-              </View>
-              <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Ended at</Text>
-                <Text style={styles.statValue}>{formatClockFromIso(pendingWakeSummary?.wakeTimeIso ?? null)}</Text>
-              </View>
-            </View>
-
-            <Pressable
-              style={styles.doneBtn}
-              onPress={() => {
-                setAutoWakeModalVisible(false);
-                clearPendingWakeSummary();
-              }}
-            >
-              <Text style={styles.doneBtnText}>Okay</Text>
             </Pressable>
           </View>
         </View>
@@ -460,14 +414,5 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: '700',
     fontSize: 16,
-  },
-  autoSummaryBox: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceAlt,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
   },
 });

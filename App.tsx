@@ -15,9 +15,11 @@ import Report from './app/tabs/Report';
 import Settings from './app/tabs/Settings';
 import { initializeWakeAlarmListeners } from './alarm/alarmManager';
 import { registerWakeAlarmBackgroundTask } from './alarm/backgroundTask';
+import { AlarmRingingOverlay } from './components/AlarmRingingOverlay';
 import { Colors } from './constants/colors';
 import { useSleepStore } from './store/useSleepStore';
 import { useUserStore } from './store/useUserStore';
+import { isExpoGo } from './utils/runtimeEnv';
 
 const RootStack = createNativeStackNavigator();
 const OnboardingStack = createNativeStackNavigator();
@@ -88,6 +90,10 @@ export default function App(): React.JSX.Element {
   }, [loadSessions, loadSettings]);
 
   useEffect(() => {
+    if (isExpoGo()) {
+      return;
+    }
+
     let dispose = (): void => undefined;
     let active = true;
 
@@ -95,7 +101,7 @@ export default function App(): React.JSX.Element {
       await registerWakeAlarmBackgroundTask();
 
       const cleanup = await initializeWakeAlarmListeners(async () => {
-        await useSleepStore.getState().autoEndSleepFromAlarm();
+        await useSleepStore.getState().handleWakeAlarmTriggered();
       });
 
       if (!active) {
@@ -148,6 +154,7 @@ export default function App(): React.JSX.Element {
           <RootStack.Screen name="Main" component={MainTabs} />
         )}
       </RootStack.Navigator>
+      <AlarmRingingOverlay />
     </NavigationContainer>
   );
 }

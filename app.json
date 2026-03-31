@@ -9,14 +9,29 @@
       "**/*"
     ],
     "android": {
-      "package": "com.sleepwise.app"
+      "package": "com.sleepwise.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.sleepwise.app"
     },
     "plugins": [
       "expo-notifications",
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4b133733-798d-4a6a-b0c9-04a36ae69248"
+      }
+    }
   }
 }

@@ -1,6 +1,7 @@
 import * as TaskManager from 'expo-task-manager';
 
 import { useSleepStore } from '../store/useSleepStore';
+import { isExpoGo } from '../utils/runtimeEnv';
 
 export const WAKE_ALARM_BACKGROUND_TASK = 'sleepwise-wake-alarm-task';
 
@@ -28,11 +29,13 @@ if (!TaskManager.isTaskDefined(WAKE_ALARM_BACKGROUND_TASK)) {
 		if (error) return;
 		if (!isWakeAlarmPayload(data)) return;
 
-		await useSleepStore.getState().autoEndSleepFromAlarm();
+		await useSleepStore.getState().handleWakeAlarmTriggered({ allowAudio: false });
 	});
 }
 
 export async function registerWakeAlarmBackgroundTask(): Promise<void> {
+	if (isExpoGo()) return;
+
 	const Notifications = await import('expo-notifications').catch(() => null);
 	if (!Notifications) return;
 
