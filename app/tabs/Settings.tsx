@@ -9,6 +9,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { cancelWakeAlarm, requestAlarmPermission, scheduleWakeAlarm } from '../../alarm/alarmManager';
@@ -21,6 +23,7 @@ import {
 } from '../../notifications/notificationManager';
 import { useSleepStore } from '../../store/useSleepStore';
 import { useUserStore } from '../../store/useUserStore';
+import type { AlarmSoundMode } from '../../types';
 
 function isValidHHMM(value: string): boolean {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
@@ -28,6 +31,22 @@ function isValidHHMM(value: string): boolean {
   const h = Number(match[1]);
   const m = Number(match[2]);
   return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+}
+
+function extractFileExtension(value: string): string {
+  const clean = value.split('?')[0] ?? value;
+  const lastDot = clean.lastIndexOf('.');
+  if (lastDot < 0) return '.mp3';
+  return clean.slice(lastDot);
+}
+
+function getReadableSoundName(name: string | null, uri: string | null): string {
+  if (name && name.trim().length > 0) return name;
+  if (!uri) return 'No file selected';
+
+  const clean = uri.split('?')[0] ?? uri;
+  const parts = clean.split('/').filter(Boolean);
+  return parts[parts.length - 1] ?? 'Custom sound';
 }
 
 export default function Settings(): React.JSX.Element {
@@ -45,6 +64,14 @@ export default function Settings(): React.JSX.Element {
   const [notificationsEnabled, setNotificationsEnabled] = useState(settings.notifications_enabled);
   const [alarmTime, setAlarmTime] = useState(settings.alarm_time);
   const [alarmEnabled, setAlarmEnabled] = useState(settings.alarm_enabled);
+  const [alarmSoundMode, setAlarmSoundMode] = useState<AlarmSoundMode>(settings.alarm_sound_mode);
+  const [customAlarmSoundUri, setCustomAlarmSoundUri] = useState<string | null>(
+    settings.alarm_custom_sound_uri,
+  );
+  const [customAlarmSoundName, setCustomAlarmSoundName] = useState<string | null>(
+    settings.alarm_custom_sound_name,
+  );
+  const [isPickingSound, setIsPickingSound] = useState(false);
 
   useEffect(() => {
     setName(settings.name);
@@ -53,11 +80,70 @@ export default function Settings(): React.JSX.Element {
     setNotificationsEnabled(settings.notifications_enabled);
     setAlarmTime(settings.alarm_time);
     setAlarmEnabled(settings.alarm_enabled);
+    setAlarmSoundMode(settings.alarm_sound_mode);
+    setCustomAlarmSoundUri(settings.alarm_custom_sound_uri);
+    setCustomAlarmSoundName(settings.alarm_custom_sound_name);
   }, [settings]);
+
+  const onPickCustomSound = async (): Promise<void> => {
+    setIsPickingSound(true);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const picked = result.assets[0];
+      const baseDir = FileSystem.documentDirectory;
+      if (!baseDir) {
+        Alert.alert('Storage unavailable', 'Unable to access app storage for custom sounds.');
+        return;
+      }
+
+      const extension = extractFileExtension(picked.name || picked.uri);
+      const targetUri = `${baseDir}alarm-custom-tone${extension}`;
+
+      const existing = await FileSystem.getInfoAsync(targetUri);
+      if (existing.exists) {
+        await FileSystem.deleteAsync(targetUri, { idempotent: true });
+      }
+
+      await FileSystem.copyAsync({ from: picked.uri, to: targetUri });
+
+      setAlarmSoundMode('custom');
+      setCustomAlarmSoundUri(targetUri);
+      setCustomAlarmSoundName(picked.name || null);
+    } catch {
+      Alert.alert('Could not add sound', 'Please try a different audio file.');
+    } finally {
+      setIsPickingSound(false);
+    }
+  };
+
+  const onClearCustomSound = async (): Promise<void> => {
+    if (customAlarmSoundUri) {
+      try {
+        await FileSystem.deleteAsync(customAlarmSoundUri, { idempotent: true });
+      } catch {
+        // Ignore cleanup errors and continue with settings reset.
+      }
+    }
+
+    setCustomAlarmSoundUri(null);
+    setCustomAlarmSoundName(null);
+    setAlarmSoundMode('system');
+  };
 
   const onSave = async (): Promise<void> => {
     if (!isValidHHMM(bedtime) || !isValidHHMM(alarmTime)) {
       Alert.alert('Invalid time', 'Use HH:mm format, for example 22:30.');
+      return;
+    }
+
+    if (alarmSoundMode === 'custom' && !customAlarmSoundUri) {
+      Alert.alert('Custom sound required', 'Pick an audio file for your custom alarm sound.');
       return;
     }
 
@@ -94,6 +180,9 @@ export default function Settings(): React.JSX.Element {
       notifications_enabled: finalNotifications,
       alarm_time: alarmTime,
       alarm_enabled: finalAlarmEnabled,
+      alarm_sound_mode: alarmSoundMode,
+      alarm_custom_sound_uri: customAlarmSoundUri,
+      alarm_custom_sound_name: customAlarmSoundName,
     });
 
     if (finalNotifications) {
@@ -217,33 +306,101 @@ export default function Settings(): React.JSX.Element {
           </Pressable>
         </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionHeader}>WAKE ALARM</Text>
-            <View style={styles.cardGroup}>
-              <View style={[styles.row, styles.bottomBorder]}>
-                <Text style={styles.label}>Alarm Time</Text>
-                <TextInput
-                  value={alarmTime}
-                  onChangeText={setAlarmTime}
-                  style={styles.input}
-                  placeholder="06:30"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                  returnKeyType="done"
-                />
-              </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>WAKE ALARM</Text>
+          <View style={styles.cardGroup}>
+            <View style={[styles.row, styles.bottomBorder]}>
+              <Text style={styles.label}>Alarm Time</Text>
+              <TextInput
+                value={alarmTime}
+                onChangeText={setAlarmTime}
+                style={styles.input}
+                placeholder="06:30"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="numbers-and-punctuation"
+                returnKeyType="done"
+              />
+            </View>
 
-              <View style={styles.row}>
-                <Text style={styles.label}>Enable Wake Alarm</Text>
-                <Switch
-                  value={alarmEnabled}
-                  onValueChange={setAlarmEnabled}
-                  trackColor={{ false: Colors.border, true: Colors.primary }}
-                  thumbColor={Colors.textPrimary}
-                />
+            <View style={[styles.soundModeContainer, styles.bottomBorder]}>
+              <Text style={styles.label}>Alarm Tone</Text>
+              <View style={styles.soundModeRow}>
+                <Pressable
+                  style={[
+                    styles.soundModeButton,
+                    alarmSoundMode === 'system' && styles.soundModeButtonActive,
+                  ]}
+                  onPress={() => setAlarmSoundMode('system')}
+                >
+                  <Text
+                    style={[
+                      styles.soundModeText,
+                      alarmSoundMode === 'system' && styles.soundModeTextActive,
+                    ]}
+                  >
+                    Phone Default
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.soundModeButton,
+                    alarmSoundMode === 'custom' && styles.soundModeButtonActive,
+                  ]}
+                  onPress={() => setAlarmSoundMode('custom')}
+                >
+                  <Text
+                    style={[
+                      styles.soundModeText,
+                      alarmSoundMode === 'custom' && styles.soundModeTextActive,
+                    ]}
+                  >
+                    Custom
+                  </Text>
+                </Pressable>
               </View>
             </View>
+
+            <View style={[styles.customSoundRow, styles.bottomBorder]}>
+              <View style={styles.customSoundMeta}>
+                <Text style={styles.customSoundLabel}>Selected</Text>
+                <Text style={styles.customSoundName} numberOfLines={1}>
+                  {getReadableSoundName(customAlarmSoundName, customAlarmSoundUri)}
+                </Text>
+              </View>
+              <Pressable
+                style={[styles.smallActionButton, isPickingSound && styles.disabledButton]}
+                onPress={onPickCustomSound}
+                disabled={isPickingSound}
+              >
+                <Text style={styles.smallActionButtonText}>{isPickingSound ? 'Adding...' : 'Choose'}</Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.row, styles.bottomBorder]}>
+              <Text style={styles.label}>Enable Wake Alarm</Text>
+              <Switch
+                value={alarmEnabled}
+                onValueChange={setAlarmEnabled}
+                trackColor={{ false: Colors.border, true: Colors.primary }}
+                thumbColor={Colors.textPrimary}
+              />
+            </View>
+
+            <View style={styles.row}>
+              <Text style={styles.label}>Remove Custom Tone</Text>
+              <Pressable
+                style={[
+                  styles.smallActionButton,
+                  !customAlarmSoundUri && styles.disabledButton,
+                ]}
+                onPress={onClearCustomSound}
+                disabled={!customAlarmSoundUri}
+              >
+                <Text style={styles.smallActionButtonText}>Clear</Text>
+              </Pressable>
+            </View>
           </View>
+        </View>
 
         <Text style={styles.version}>App Version 1.0.0</Text>
       </ScrollView>
@@ -333,6 +490,74 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minWidth: 56,
     textAlign: 'center',
+  },
+  soundModeContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  soundModeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  soundModeButton: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  soundModeButtonActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#223A54',
+  },
+  soundModeText: {
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  soundModeTextActive: {
+    color: Colors.textPrimary,
+  },
+  customSoundRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  customSoundMeta: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  customSoundLabel: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  customSoundName: {
+    color: Colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  smallActionButton: {
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  smallActionButtonText: {
+    color: Colors.textPrimary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   saveButton: {
     backgroundColor: Colors.primary,

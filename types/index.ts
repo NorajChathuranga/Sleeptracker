@@ -12,12 +12,17 @@ export interface SleepSession {
   updated_at: string;
 }
 
+export type AlarmSoundMode = 'system' | 'custom';
+
 export interface UserSettings {
   name: string;
   sleep_goal_min: number;
   target_bedtime: string;
   alarm_time: string;
   alarm_enabled: boolean;
+  alarm_sound_mode: AlarmSoundMode;
+  alarm_custom_sound_uri: string | null;
+  alarm_custom_sound_name: string | null;
   onboarding_done: boolean;
   baseline_established: boolean;
   baseline_avg_duration: number | null;

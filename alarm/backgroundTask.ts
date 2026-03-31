@@ -29,7 +29,7 @@ if (!TaskManager.isTaskDefined(WAKE_ALARM_BACKGROUND_TASK)) {
 		if (error) return;
 		if (!isWakeAlarmPayload(data)) return;
 
-		await useSleepStore.getState().handleWakeAlarmTriggered({ allowAudio: false });
+		await useSleepStore.getState().handleWakeAlarmTriggered();
 	});
 }
 

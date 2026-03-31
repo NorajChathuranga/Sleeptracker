@@ -70,6 +70,14 @@ async function ensureAlarmChannel(Notifications: NotificationsModule): Promise<v
 		lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
 		vibrationPattern: [0, 250, 250, 250, 250],
 		sound: 'default',
+		audioAttributes: {
+			usage: Notifications.AndroidAudioUsage.ALARM,
+			contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+			flags: {
+				enforceAudibility: true,
+				requestHardwareAudioVideoSynchronization: false,
+			},
+		},
 		enableLights: true,
 		enableVibrate: true,
 	});

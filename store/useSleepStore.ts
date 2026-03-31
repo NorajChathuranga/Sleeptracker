@@ -208,7 +208,15 @@ export const useSleepStore = create<SleepState>((set, get) => ({
     await scheduleWakeAlarmEscalation();
 
     if (allowAudio) {
-      await startAlarmRingingLoop();
+      const settings = useUserStore.getState().settings;
+      try {
+        await startAlarmRingingLoop({
+          mode: settings.alarm_sound_mode,
+          customSoundUri: settings.alarm_custom_sound_uri,
+        });
+      } catch {
+        // Keep alarm state active even if audio playback cannot start in current app state.
+      }
     }
   },
 
