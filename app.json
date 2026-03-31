@@ -15,7 +15,6 @@
       "bundleIdentifier": "com.sleepwise.app"
     },
     "plugins": [
-      "expo-sqlite",
       "expo-notifications"
     ]
   }

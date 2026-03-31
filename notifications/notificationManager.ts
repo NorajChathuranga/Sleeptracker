@@ -53,9 +53,9 @@ export async function scheduleAdaptiveBedtimeReminder(
       body: 'Start winding down now so falling asleep feels easier.',
     },
     trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour: targetHour,
       minute: targetMinute,
-      repeats: true,
     },
   });
 }
@@ -70,7 +70,9 @@ export async function scheduleSleepDebtAlert(debt_min: number): Promise<void> {
       body: `You are carrying about ${debtH}h of sleep debt this week. Consider an earlier bedtime tonight.`,
     },
     trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: 10,
+      repeats: false,
     },
   });
 }
