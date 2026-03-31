@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "SleepWise",
+    "slug": "sleepwise",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.sleepwise.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.sleepwise.app"
+    },
+    "plugins": [
+      "expo-notifications"
+    ]
+  }
+}
