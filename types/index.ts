@@ -60,3 +60,13 @@ export interface WeeklySummary {
   moodAvgLongSleep: number | null;
   moodAvgShortSleep: number | null;
 }
+
+export type AiInsightProvider = 'gemini' | 'groq' | 'rule';
+
+export interface WeeklyAiInsight {
+  summary: string;
+  pattern: string;
+  nextStep: string;
+  provider: AiInsightProvider;
+  fallbackUsed: boolean;
+}
