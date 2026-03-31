@@ -1,6 +1,6 @@
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync } from 'expo-audio';
 import type { AudioPlayer, AudioSource } from 'expo-audio';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 import type { AlarmSoundMode } from '../types';
 
@@ -15,6 +15,17 @@ interface AlarmRingingOptions {
   mode: AlarmSoundMode;
   customSoundUri?: string | null;
 }
+
+interface AlarmToneNativeModule {
+  playDefaultAlarmTone: () => Promise<void>;
+  playAlarmToneFromUri: (uri: string) => Promise<void>;
+  stopAlarmTone: () => Promise<void>;
+}
+
+const alarmToneNativeModule =
+  Platform.OS === 'android'
+    ? (NativeModules.AlarmToneModule as AlarmToneNativeModule | undefined)
+    : undefined;
 
 interface ResolvedAlarmSource {
   source: AudioSource;
@@ -51,7 +62,7 @@ function resolveFallbackSource(): ResolvedAlarmSource {
 
 function preparePlayerForSource(resolved: ResolvedAlarmSource): AudioPlayer {
   if (!activePlayer) {
-    activePlayer = createAudioPlayer(resolved.source);
+    activePlayer = createAudioPlayer(resolved.source, { keepAudioSessionActive: true });
     activeSourceKey = resolved.sourceKey;
     return activePlayer;
   }
@@ -72,6 +83,25 @@ async function configureAudioMode(): Promise<void> {
     interruptionMode: 'doNotMix',
     shouldRouteThroughEarpiece: false,
   });
+
+  // Keep the audio subsystem active before starting alarm playback.
+  await setIsAudioActiveAsync(true);
+}
+
+async function tryStartNativeAlarmTone(options: AlarmRingingOptions): Promise<boolean> {
+  if (!alarmToneNativeModule) return false;
+
+  try {
+    if (options.mode === 'custom' && options.customSoundUri) {
+      await alarmToneNativeModule.playAlarmToneFromUri(options.customSoundUri);
+      return true;
+    }
+
+    await alarmToneNativeModule.playDefaultAlarmTone();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function startAlarmRingingLoop(
@@ -87,6 +117,9 @@ export async function startAlarmRingingLoop(
   }
 
   startPromise = (async () => {
+    const nativeStarted = await tryStartNativeAlarmTone(options);
+    if (nativeStarted) return;
+
     await configureAudioMode();
 
     const preferred = resolvePreferredSource(options);
@@ -111,6 +144,14 @@ export async function startAlarmRingingLoop(
 }
 
 export async function stopAlarmRingingLoop(): Promise<void> {
+  if (alarmToneNativeModule) {
+    try {
+      await alarmToneNativeModule.stopAlarmTone();
+    } catch {
+      // Ignore native stop errors during teardown.
+    }
+  }
+
   if (startPromise) {
     await startPromise;
   }

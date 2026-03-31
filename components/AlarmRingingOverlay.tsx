@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/colors';
+import { useUserStore } from '../store/useUserStore';
 import { useSleepStore } from '../store/useSleepStore';
 import { formatClockFromIso, formatDuration } from '../utils/timeUtils';
 
@@ -10,8 +11,16 @@ export function AlarmRingingOverlay(): React.JSX.Element {
   const pendingWakeSummary = useSleepStore((state) => state.pendingWakeSummary);
   const dismissWakeAlarm = useSleepStore((state) => state.dismissWakeAlarm);
   const snoozeWakeAlarm = useSleepStore((state) => state.snoozeWakeAlarm);
+  const alarmSoundMode = useUserStore((state) => state.settings.alarm_sound_mode);
+  const customAlarmSoundUri = useUserStore((state) => state.settings.alarm_custom_sound_uri);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!ringingAlarm) return;
+
+    void useSleepStore.getState().handleWakeAlarmTriggered({ allowAudio: true });
+  }, [alarmSoundMode, customAlarmSoundUri, ringingAlarm?.triggeredAtIso]);
 
   const onDismiss = async (): Promise<void> => {
     setIsSubmitting(true);
