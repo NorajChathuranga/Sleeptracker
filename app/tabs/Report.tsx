@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { format, parseISO } from 'date-fns';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '../../constants/colors';
+import { generateWeeklyAiInsight } from '../../logic/aiAdvice';
 import { buildWeeklySummary, getWeekSessions } from '../../logic/consistencyAnalyzer';
-import { SleepSession } from '../../types';
+import { SleepSession, WeeklyAiInsight } from '../../types';
 import { useSleepStore } from '../../store/useSleepStore';
 import { useUserStore } from '../../store/useUserStore';
 import { formatDuration, toAdjustedMinutes } from '../../utils/timeUtils';
@@ -29,8 +30,17 @@ function avgScore(sessions: SleepSession[]): number {
   return Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length);
 }
 
+function providerLabelForInsight(insight: WeeklyAiInsight | null): string {
+  if (!insight) return 'Rule-based';
+  if (insight.provider === 'gemini') return 'Gemini Flash';
+  if (insight.provider === 'groq') return insight.fallbackUsed ? 'Groq (fallback)' : 'Groq';
+  return 'Rule-based';
+}
+
 export default function Report(): React.JSX.Element {
   const [weekOffset, setWeekOffset] = useState(0);
+  const [weeklyInsight, setWeeklyInsight] = useState<WeeklyAiInsight | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
   const sessions = useSleepStore((state) => state.sessions);
   const goalMin = useUserStore((state) => state.settings.sleep_goal_min);
 
@@ -53,6 +63,43 @@ export default function Report(): React.JSX.Element {
   }));
 
   const targetWeekMin = goalMin * 7;
+
+  const weekKey = useMemo(
+    () =>
+      weekSessions
+        .map((session) => `${session.id}:${session.updated_at}:${session.duration_min ?? -1}`)
+        .join('|'),
+    [weekSessions],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWeeklyInsight(): Promise<void> {
+      setInsightLoading(true);
+      try {
+        const result = await generateWeeklyAiInsight({
+          weekSessions,
+          summary,
+          goalMin,
+        });
+
+        if (!cancelled) {
+          setWeeklyInsight(result);
+        }
+      } finally {
+        if (!cancelled) {
+          setInsightLoading(false);
+        }
+      }
+    }
+
+    void loadWeeklyInsight();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [goalMin, summary, weekKey, weekSessions]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -111,6 +158,29 @@ export default function Report(): React.JSX.Element {
               <Text style={styles.statValue}>{summary.goalHitDays} / 7 days</Text>
             </View>
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.aiHeaderRow}>
+            <Text style={styles.cardTitle}>AI Weekly Insight</Text>
+            <Text style={styles.aiProviderPill}>{providerLabelForInsight(weeklyInsight)}</Text>
+          </View>
+
+          {insightLoading ? (
+            <Text style={styles.aiLoadingText}>Generating personalized weekly insight...</Text>
+          ) : (
+            <View style={styles.aiContentWrap}>
+              <Text style={styles.aiSummaryText}>
+                {weeklyInsight?.summary ?? 'Add more sleep logs this week to unlock a better summary.'}
+              </Text>
+              <View style={styles.divider} />
+              <Text style={styles.aiLabel}>Pattern</Text>
+              <Text style={styles.aiBodyText}>{weeklyInsight?.pattern ?? '--'}</Text>
+              <Text style={styles.aiLabel}>Next step</Text>
+              <Text style={styles.aiBodyText}>{weeklyInsight?.nextStep ?? '--'}</Text>
+              <Text style={styles.aiFootnote}>Duration, score, debt, and consistency remain fully rule-based.</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -314,6 +384,61 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.border,
+  },
+  aiHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 8,
+  },
+  aiProviderPill: {
+    color: Colors.primaryLight,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  aiLoadingText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  aiContentWrap: {
+    gap: 10,
+  },
+  aiSummaryText: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: '700',
+  },
+  aiLabel: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: 2,
+  },
+  aiBodyText: {
+    color: Colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  aiFootnote: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+    fontWeight: '500',
   },
   highlightValue: {
     color: Colors.primaryLight,

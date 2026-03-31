@@ -7,6 +7,14 @@ import { sleepRepository } from '../db/sleepRepository';
 import { buildBaseline } from '../logic/baselineAnalyzer';
 import { calculateSleepScore } from '../logic/scoreCalculator';
 import {
+  cancelWakeAlarm,
+  cancelWakeAlarmEscalation,
+  scheduleWakeAlarm,
+  scheduleWakeAlarmEscalation,
+  scheduleWakeAlarmInMinutes,
+} from '../alarm/alarmManager';
+import { startAlarmRingingLoop, stopAlarmRingingLoop } from '../alarm/ringingManager';
+import {
   scheduleAdaptiveBedtimeReminder,
   scheduleSleepDebtAlert,
 } from '../notifications/notificationManager';
@@ -19,13 +27,31 @@ interface EndSleepPayload {
   notes: string | null;
 }
 
+interface WakeSummary {
+  sessionId: string;
+  durationMin: number;
+  wakeTimeIso: string;
+}
+
+interface RingingAlarm {
+  triggeredAtIso: string;
+}
+
 interface SleepState {
   sessions: SleepSession[];
   activeSession: SleepSession | null;
+  pendingWakeSummary: WakeSummary | null;
+  ringingAlarm: RingingAlarm | null;
   isLoading: boolean;
+  isAutoEndingByAlarm: boolean;
   loadSessions: () => Promise<void>;
   startSleep: () => Promise<void>;
   endSleep: (payload: EndSleepPayload) => Promise<SleepSession | null>;
+  autoEndSleepFromAlarm: () => Promise<SleepSession | null>;
+  handleWakeAlarmTriggered: (options?: { allowAudio?: boolean }) => Promise<void>;
+  dismissWakeAlarm: () => Promise<void>;
+  snoozeWakeAlarm: (minutes?: number) => Promise<void>;
+  clearPendingWakeSummary: () => void;
   getLast7Days: () => SleepSession[];
   getTodaySession: () => SleepSession | null;
   recoverStaleSession: () => Promise<SleepSession | null>;
@@ -42,7 +68,10 @@ function getCompletedSessions(sessions: SleepSession[]): SleepSession[] {
 export const useSleepStore = create<SleepState>((set, get) => ({
   sessions: [],
   activeSession: null,
+  pendingWakeSummary: null,
+  ringingAlarm: null,
   isLoading: false,
+  isAutoEndingByAlarm: false,
 
   loadSessions: async () => {
     set({ isLoading: true });
@@ -75,11 +104,20 @@ export const useSleepStore = create<SleepState>((set, get) => ({
       sessions: [...state.sessions, session],
       activeSession: session,
     }));
+
+    const userSettings = useUserStore.getState().settings;
+    if (userSettings.alarm_enabled) {
+      await scheduleWakeAlarm(userSettings.alarm_time);
+    }
   },
 
   endSleep: async ({ mood, notes }) => {
     const active = get().activeSession;
     if (!active) return null;
+
+    await cancelWakeAlarm();
+    await cancelWakeAlarmEscalation();
+    await stopAlarmRingingLoop();
 
     const now = new Date();
     const rawDuration = differenceInMinutes(now, new Date(active.sleep_start));
@@ -136,6 +174,70 @@ export const useSleepStore = create<SleepState>((set, get) => ({
     return updated;
   },
 
+  autoEndSleepFromAlarm: async () => {
+    const active = get().activeSession;
+    if (!active) return null;
+    if (get().isAutoEndingByAlarm) return null;
+
+    set({ isAutoEndingByAlarm: true });
+
+    try {
+      const updated = await get().endSleep({ mood: null, notes: 'Auto-ended by alarm' });
+      if (!updated) return null;
+
+      set({
+        pendingWakeSummary: {
+          sessionId: updated.id,
+          durationMin: updated.duration_min ?? 0,
+          wakeTimeIso: updated.wake_time ?? new Date().toISOString(),
+        },
+      });
+
+      return updated;
+    } finally {
+      set({ isAutoEndingByAlarm: false });
+    }
+  },
+
+  handleWakeAlarmTriggered: async ({ allowAudio = true } = {}) => {
+    if (!get().ringingAlarm) {
+      set({ ringingAlarm: { triggeredAtIso: new Date().toISOString() } });
+    }
+
+    await get().autoEndSleepFromAlarm();
+    await scheduleWakeAlarmEscalation();
+
+    if (allowAudio) {
+      const settings = useUserStore.getState().settings;
+      try {
+        await startAlarmRingingLoop({
+          mode: settings.alarm_sound_mode,
+          customSoundUri: settings.alarm_custom_sound_uri,
+        });
+      } catch {
+        // Keep alarm state active even if audio playback cannot start in current app state.
+      }
+    }
+  },
+
+  dismissWakeAlarm: async () => {
+    await stopAlarmRingingLoop();
+    await cancelWakeAlarm();
+    await cancelWakeAlarmEscalation();
+    set({ ringingAlarm: null, pendingWakeSummary: null });
+  },
+
+  snoozeWakeAlarm: async (minutes = 10) => {
+    await stopAlarmRingingLoop();
+    await cancelWakeAlarmEscalation();
+    await scheduleWakeAlarmInMinutes(minutes);
+    set({ ringingAlarm: null });
+  },
+
+  clearPendingWakeSummary: () => {
+    set({ pendingWakeSummary: null });
+  },
+
   getLast7Days: () => getCompletedSessions(get().sessions).slice(-7),
 
   getTodaySession: () => {
@@ -178,6 +280,9 @@ export const useSleepStore = create<SleepState>((set, get) => ({
 
   clearAllData: async () => {
     await sleepRepository.clearAll();
-    set({ sessions: [], activeSession: null });
+    await cancelWakeAlarm();
+    await cancelWakeAlarmEscalation();
+    await stopAlarmRingingLoop();
+    set({ sessions: [], activeSession: null, pendingWakeSummary: null, ringingAlarm: null });
   },
 }));

@@ -1,5 +1,7 @@
 node_modules
+.env
 .expo
+.expo-export-check
 .expo-shared
 dist
 web-build
@@ -7,3 +9,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .DS_Store
+
+# Expo prebuild native folders (CNG workflow)
+android
+ios
