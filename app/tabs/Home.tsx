@@ -217,12 +217,14 @@ export default function Home(): React.JSX.Element {
   }, [activeSession, elapsed]);
 
   const remainingForGoal = Math.max(0, settings.sleep_goal_min - elapsed);
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.greet}>Good {format(new Date(), 'aaaa')}, {settings.name}</Text>
+          <Text style={styles.greet}>Good {timeOfDay}, {settings.name}</Text>
           <Text style={styles.date}>{format(new Date(), 'EEEE, MMMM d')}</Text>
         </View>
 
@@ -297,7 +299,7 @@ export default function Home(): React.JSX.Element {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Good morning</Text>
+            <Text style={styles.modalTitle}>Good {timeOfDay}</Text>
             <View style={styles.modalSummaryBox}>
               <View style={styles.modalSummaryRow}>
                 <Text style={styles.modalSummaryLabel}>Slept</Text>
