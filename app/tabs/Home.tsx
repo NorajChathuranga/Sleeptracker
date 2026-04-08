@@ -294,7 +294,7 @@ export default function Home(): React.JSX.Element {
         transparent
         animationType="slide"
         onRequestClose={() => {
-          void submitWake({ skipMood: true });
+          closeWakeModal();
         }}
       >
         <View style={styles.modalBackdrop}>
@@ -330,11 +330,10 @@ export default function Home(): React.JSX.Element {
             </Pressable>
 
             <Pressable
-              style={[styles.closeBtn, isWakeSubmitting && styles.disabledBtn]}
+              style={styles.closeBtn}
               onPress={() => {
-                void submitWake({ skipMood: true });
+                closeWakeModal();
               }}
-              disabled={isWakeSubmitting}
             >
               <Text style={styles.closeBtnText}>Close now</Text>
             </Pressable>
