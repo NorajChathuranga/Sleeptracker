@@ -41,7 +41,16 @@ export function AlarmRingingOverlay(): React.JSX.Element {
   };
 
   return (
-    <Modal visible={Boolean(ringingAlarm)} transparent animationType="fade" statusBarTranslucent>
+    <Modal
+      visible={Boolean(ringingAlarm)}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => {
+        if (isSubmitting) return;
+        void onDismiss();
+      }}
+    >
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <Text style={styles.badge}>ALARM</Text>

@@ -4,11 +4,16 @@
     "slug": "sleepwise",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "assetBundlePatterns": [
       "**/*"
     ],
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B132B"
+      },
       "package": "com.sleepwise.app",
       "permissions": [
         "android.permission.RECORD_AUDIO",
@@ -17,6 +22,9 @@
     },
     "ios": {
       "bundleIdentifier": "com.sleepwise.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-notifications",
